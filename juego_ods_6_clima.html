@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Juego: ODS 6 y Cambio Climático</title>
+  <style>
+    :root{--bg:#0f172a;--card:#0b1220;--accent:#06b6d4;--muted:#94a3b8}
+    *{box-sizing:border-box;font-family:Inter,system-ui,Arial}
+    body{margin:0;min-height:100vh;background:linear-gradient(180deg,var(--bg),#071029);color:#e6eef8;display:flex;align-items:center;justify-content:center;padding:24px}
+    .card{width:920px;max-width:96vw;background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));border-radius:12px;padding:22px;box-shadow:0 10px 30px rgba(2,6,23,0.6)}
+    h1{margin:0 0 6px;font-size:20px}
+    p.lead{color:var(--muted);margin:0 0 14px}
+    .question{font-size:18px;margin:10px 0 18px}
+    .choices{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .choice{background:transparent;border:1px solid rgba(255,255,255,0.06);padding:12px;border-radius:8px;cursor:pointer;transition:transform .12s,background .12s}
+    .choice:hover{transform:translateY(-3px);background:rgba(255,255,255,0.02)}
+    .choice.correct{outline:3px solid rgba(34,197,94,0.15);background:rgba(16,185,129,0.06)}
+    .choice.wrong{outline:3px solid rgba(239,68,68,0.12);background:rgba(239,68,68,0.04)}
+    .footer{display:flex;align-items:center;justify-content:space-between;margin-top:18px}
+    .timer{font-weight:700}
+    .progress{height:10px;background:rgba(255,255,255,0.04);border-radius:8px;overflow:hidden;flex:1;margin:0 14px}
+    .bar{height:100%;width:100%;background:linear-gradient(90deg,var(--accent),#0ea5a9)}
+    .score{font-weight:700}
+    .center{display:flex;align-items:center;justify-content:center}
+    .big{font-size:28px;margin:18px 0}
+    button.primary{background:var(--accent);color:#012;border:none;padding:10px 14px;border-radius:8px;cursor:pointer;font-weight:700}
+    .small{font-size:13px;color:var(--muted)}
+    footer.small{margin-top:10px;text-align:center;color:var(--muted)}
+  </style>
+</head>
+<body>
+  <div class="card" id="app">
+    <h1>Juego: ODS 6 — Agua limpia y saneamiento</h1>
+    <p class="lead">Responde 10 preguntas sobre el ODS 6 y el cambio climático. Tienes 5 segundos por pregunta. ¡Suerte!</p>
+
+    <div id="game">
+      <div id="questionBox">
+        <div class="question" id="questionText">Cargando preguntas...</div>
+        <div class="choices" id="choices"></div>
+      </div>
+
+      <div class="footer">
+        <div class="timer">Tiempo: <span id="timeLeft">5</span>s</div>
+        <div class="progress" title="Progreso">
+          <div class="bar" id="progressBar" style="width:100%"></div>
+        </div>
+        <div class="score">Puntos: <span id="score">0</span></div>
+      </div>
+    </div>
+
+    <div id="endScreen" style="display:none;text-align:center">
+      <div class="big" id="finalScore">Tu puntuación: 0 / 10</div>
+      <div class="center"><button class="primary" id="restartBtn">Jugar otra vez</button></div>
+    </div>
+
+    <footer class="small">El juego avanza automáticamente si se termina el tiempo. Sonidos generados localmente.</footer>
+  </div>
+
+<script>
+// Preguntas: 10 preguntas de ejemplo (puedes editarlas)
+const questions = [
+  {q: "¿Qué busca el ODS 6?", choices: ["Acceso a educación gratuita","Agua limpia y saneamiento","Energía renovable","Ciudades sostenibles"], answer: 1},
+  {q: "¿Cuál es una consecuencia del cambio climático en el agua?", choices: ["Aumento de la disponibilidad de agua dulce","Sequías más frecuentes","Menos evaporación","Disminución del nivel del mar"], answer: 1},
+  {q: "¿Qué significa 'saneamiento'?", choices: ["Construir más piscinas","Tratamiento seguro de aguas residuales","Aumentar el uso de plásticos","Regar cultivos"], answer: 1},
+  {q: "Una acción para conservar el agua es:", choices: ["Dejar el grifo abierto al lavar platos","Recolectar agua de lluvia","Usar más fertilizantes","Aumentar riego innecesario"], answer: 1},
+  {q: "¿Qué herramienta ayuda a monitorear cuerpos de agua a nivel amplio?", choices: ["Sismógrafos","Satélites y teledetección","Termómetros de cocina","Lámparas UV"], answer: 1},
+  {q: "El uso de agroquímicos puede: ", choices: ["Mejorar la calidad del agua","Contaminar ríos y acuíferos","Hacer el agua potable automáticamente","Eliminar bacterias beneficiosas únicamente"], answer: 1},
+  {q: "¿Qué es reutilizar agua?", choices: ["Desechar agua inmediatamente","Tratar y usar agua una vez más","Vender agua usada","Verter agua al mar"], answer: 1},
+  {q: "Los ecosistemas saludables ayudan al ciclo del agua porque:", choices: ["Absorben y liberan agua naturalmente","Bloquean la lluvia","Generan petróleo","Aumentan la salinidad"], answer: 0},
+  {q: "¿Qué práctica urbana reduce inundaciones y protege el agua?", choices: ["Impermeabilizar suelos","Eliminar áreas verdes","Crear sistemas de drenaje sostenible","Aumentar asfalto"], answer: 2},
+  {q: "Una meta del ODS 6 es: ", choices: ["Eliminar el agua potable","Lograr acceso universal al agua potable segura","Aumentar el precio del agua","Privatizar todas las fuentes"], answer: 1}
+];
+
+// Configuración
+const TIME_PER_QUESTION = 5; // segundos
+let current = 0;
+let score = 0;
+let timer = TIME_PER_QUESTION;
+let countdownInterval = null;
+let accepting = true;
+
+// Elements
+const questionText = document.getElementById('questionText');
+const choicesDiv = document.getElementById('choices');
+const timeLeft = document.getElementById('timeLeft');
+const progressBar = document.getElementById('progressBar');
+const scoreSpan = document.getElementById('score');
+const endScreen = document.getElementById('endScreen');
+const gameDiv = document.getElementById('game');
+const finalScore = document.getElementById('finalScore');
+const restartBtn = document.getElementById('restartBtn');
+
+function playTone(kind){
+  // kind: 'correct' or 'wrong' or 'tick'
+  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+  const o = ctx.createOscillator();
+  const g = ctx.createGain();
+  o.type = kind === 'correct' ? 'sine' : (kind === 'wrong' ? 'square' : 'triangle');
+  o.frequency.value = kind === 'correct' ? 880 : (kind === 'wrong' ? 220 : 600);
+  g.gain.value = 0.0001;
+  o.connect(g);
+  g.connect(ctx.destination);
+  const now = ctx.currentTime;
+  g.gain.exponentialRampToValueAtTime(0.12, now + 0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001, now + 0.35);
+  o.start(now);
+  o.stop(now + 0.36);
+}
+
+function showQuestion(){
+  accepting = true;
+  timer = TIME_PER_QUESTION;
+  timeLeft.textContent = timer;
+  const q = questions[current];
+  questionText.textContent = `Pregunta ${current+1}: ${q.q}`;
+  choicesDiv.innerHTML = '';
+  q.choices.forEach((c,i)=>{
+    const b = document.createElement('button');
+    b.className = 'choice';
+    b.textContent = c;
+    b.onclick = ()=>selectAnswer(i,b);
+    choicesDiv.appendChild(b);
+  });
+  updateProgress();
+  startTimer();
+}
+
+function selectAnswer(i, btn){
+  if(!accepting) return;
+  accepting = false;
+  stopTimer();
+  const correct = questions[current].answer;
+  if(i === correct){
+    score++;
+    btn.classList.add('correct');
+    playTone('correct');
+  } else {
+    btn.classList.add('wrong');
+    // marcar la correcta
+    const buttons = Array.from(document.querySelectorAll('.choice'));
+    if(buttons[correct]) buttons[correct].classList.add('correct');
+    playTone('wrong');
+  }
+  scoreSpan.textContent = score;
+  // esperar 700ms y avanzar
+  setTimeout(()=>{
+    current++;
+    if(current >= questions.length) endGame(); else showQuestion();
+  },700);
+}
+
+function startTimer(){
+  stopTimer();
+  countdownInterval = setInterval(()=>{
+    timer -= 0.1;
+    if(timer <= 0){
+      timeLeft.textContent = 0;
+      playTone('wrong');
+      // marcar como no respondida y mostrar correcta
+      accepting = false;
+      const buttons = Array.from(document.querySelectorAll('.choice'));
+      const correct = questions[current].answer;
+      if(buttons[correct]) buttons[correct].classList.add('correct');
+      stopTimer();
+      setTimeout(()=>{
+        current++;
+        if(current >= questions.length) endGame(); else showQuestion();
+      },700);
+      return;
+    }
+    timeLeft.textContent = Math.ceil(timer);
+    progressBar.style.width = (timer/TIME_PER_QUESTION*100) + '%';
+    // tick sound each second (optional)
+  },100);
+}
+
+function stopTimer(){
+  if(countdownInterval) clearInterval(countdownInterval);
+}
+
+function updateProgress(){
+  progressBar.style.width = '100%';
+}
+
+function endGame(){
+  gameDiv.style.display = 'none';
+  endScreen.style.display = 'block';
+  finalScore.textContent = `Tu puntuación: ${score} / ${questions.length}`;
+}
+
+function restart(){
+  current = 0; score = 0; scoreSpan.textContent = 0; endScreen.style.display = 'none'; gameDiv.style.display = 'block'; showQuestion();
+}
+
+restartBtn.onclick = restart;
+
+// Inicia
+window.addEventListener('load', ()=>{
+  // mezclar preguntas si quieres (opcional)
+  // shuffle(questions);
+  showQuestion();
+});
+
+// Helper shuffle (no activado por defecto)
+function shuffle(a){
+  for(let i=a.length-1;i>0;i--){
+    const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];
+  }
+}
+</script>
+</body>
+</html>
